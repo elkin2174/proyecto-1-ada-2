@@ -2,10 +2,10 @@
 Proyecto: Plan de riego óptimo de una finca
 Análisis de Algoritmos II — Universidad del Valle
 
-Módulo: Programación dinámica (roPD), versión legible.
+Módulo: Programación dinámica (roPD).
 
-- Estados con conjuntos (frozenset) de tablones ya regados, sin máscaras binarias.
-- Clave de estado: (conjunto_regados, último_tablón_regado).
+- Estados (S, j): S es el conjunto de tablones ya regados y j el último regado.
+- Tabulación bottom-up por tamaño creciente de S.
 - Integrado con f_auxiliares e interfaz.py (opción 5 del menú).
 
 Uso:
@@ -39,7 +39,7 @@ def _suma_tiempos_regado(regados: frozenset[int], finca: list[tuple[int, int, in
 
 
 def _generar_subconjuntos(cantidad: int) -> list[frozenset[int]]:
-    """Todos los subconjuntos de {0, ..., cantidad-1} sin aritmética binaria."""
+    """Todos los subconjuntos de {0, ..., cantidad-1}."""
     subconjuntos: list[frozenset[int]] = [frozenset()]
     for indice in range(cantidad):
         nuevos = [conjunto | {indice} for conjunto in subconjuntos]
@@ -49,7 +49,7 @@ def _generar_subconjuntos(cantidad: int) -> list[frozenset[int]]:
 
 def _resolver_dp(finca: list[tuple[int, int, int, int]]) -> tuple[list[int], int]:
     """
-    DP con estados legibles.
+    Resuelve el problema por programación dinámica.
 
       estado = (conjunto_regados, ultimo_tablon_regado)
       costo_por_estado[estado] = costo mínimo parcial
@@ -127,7 +127,7 @@ def roPD(finca):
     Retorna:
         (orden_optimo, costo_minimo)
 
-    Complejidad: O(n² · 2ⁿ) en tiempo y espacio.
+    Complejidad: O(n² · 2ⁿ) en tiempo, O(n · 2ⁿ) en espacio.
     """
     n = len(finca)
     if n > MAX_N_DP:
