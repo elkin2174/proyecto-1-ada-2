@@ -1,127 +1,88 @@
-from pathlib import Path
-import re
+"""
+Proyecto: Plan de riego óptimo de una finca
+Análisis de Algoritmos II — Universidad del Valle
 
+Módulo central de utilidades compartidas por todos los algoritmos
+(fuerza bruta, voraz y programación dinámica):
+
+  · Funciones base   : calcular_tiempos, costo_tablon, costo_total
+  · Entrada/salida    : leer_finca, escribir_salida
+  · Descubrimiento    : numero_test, obtener_archivos_entrada
+  · Reportes          : imprimir_solucion
+  · Ejecución genérica: procesar_lote (batch) y ejecutar_cli (CLI)
+"""
+
+import time
+import re
+from pathlib import Path
+
+
+# ═══════════════════════════════════════════════════════════════
+#  FUNCIONES BASE (modelo de costo)
+# ═══════════════════════════════════════════════════════════════
 
 def calcular_tiempos(finca, perm):
     """
-    Objetivo:
-        Calcular el tiempo de inicio de riego de cada tablón
-        según una programación o permutación dada.
+    Calcula t[i] = tiempo de inicio de riego del tablón i según `perm`.
+    El primer tablón inicia en 0 y cada siguiente arranca cuando termina
+    de regarse el anterior (suma acumulada de los tr).
 
     Recibe:
-        finca: lista de tablones.
-            Cada tablón tiene la forma (ts, tr, p, rp).
-
-        perm: lista o tupla con el orden de riego.
-            Ejemplo: [2, 1, 4, 3, 0]
+        finca: lista de tablones, cada uno (ts, tr, p, rp).
+        perm:  orden de riego (lista/tupla de índices).
 
     Retorna:
-        Una lista t, donde t[i] es el tiempo en que inicia
-        el riego del tablón Ti.
+        lista t, donde t[i] es el tiempo de inicio del tablón Ti.
     """
-
     t = [0] * len(finca)
     tiempo_actual = 0
-
     for indice_tablon in perm:
         t[indice_tablon] = tiempo_actual
         tiempo_actual += finca[indice_tablon][1]
-
     return t
 
 
 def costo_tablon(finca, i, ti):
     """
-    Objetivo:
-        Calcular el costo individual de regar el tablón i
-        cuando inicia en el tiempo ti.
+    Costo individual de regar el tablón i empezando en el tiempo ti.
 
-    Recibe:
-        finca: lista de tablones.
-        i: índice del tablón.
-        ti: tiempo de inicio del riego del tablón i.
-
-    Retorna:
-        El costo individual del tablón i, según la función
-        de costo definida en el enunciado.
+      Caso 1 (ti == rp):      ts - (ti + tr)          ← riego perfecto
+      Caso 2 (ts - tr >= ti): 2 * (ts - (ti + tr))    ← sin daño
+      Caso 3 (otro):          2 * p * ((ti + tr) - ts) ← con daño
     """
-
     ts, tr, p, rp = finca[i]
     fin = ti + tr
-
-    # Caso 1: riego en el tiempo perfecto.
     if ti == rp:
         return ts - fin
-
-    # Caso 2: no es riego perfecto, pero termina antes o justo
-    # en el tiempo de supervivencia.
     elif ts - tr >= ti:
         return 2 * (ts - fin)
-
-    # Caso 3: termina después del tiempo de supervivencia.
     else:
         return 2 * p * (fin - ts)
 
 
 def costo_total(finca, perm):
-    """
-    Objetivo:
-        Calcular el costo total de una programación de riego.
-    Recibe:
-        finca: lista de tablones.
-        perm: lista o tupla con el orden de riego.
-    Retorna:
-        La suma de los costos individuales de todos los tablones.
-    """
+    """Suma de los costos individuales de todos los tablones según `perm`."""
     tiempos = calcular_tiempos(finca, perm)
-    total = 0
+    return sum(costo_tablon(finca, i, tiempos[i]) for i in perm)
 
-    for indice_tablon in perm:
-        total += costo_tablon(finca, indice_tablon, tiempos[indice_tablon])
 
-    return total
-
-def evaluar_programacion(finca, orden):
-    """
-    Función auxiliar.
-
-    Objetivo:
-        Alias de costo_total. Se deja para que fuerza bruta pueda
-        usar un nombre más descriptivo.
-
-    Recibe:
-        finca: lista de tablones.
-        orden: orden de riego.
-
-    Retorna:
-        Costo total de esa programación.
-    """
-
-    return costo_total(finca, orden)
-
+# ═══════════════════════════════════════════════════════════════
+#  ENTRADA / SALIDA
+# ═══════════════════════════════════════════════════════════════
 
 def leer_finca(ruta_archivo):
     """
-    Función auxiliar.
-
-    Objetivo:
-        Leer una finca desde un archivo de texto.
-
-    Recibe:
-        ruta_archivo: ruta del archivo de entrada.
+    Lee una finca desde un archivo de texto.
 
     Formato esperado:
         n
         ts0,tr0,p0,rp0
-        ts1,tr1,p1,rp1
         ...
         ts(n-1),tr(n-1),p(n-1),rp(n-1)
 
     Retorna:
-        finca: lista de tablones.
-            Cada tablón es una tupla (ts, tr, p, rp).
+        finca: lista de tablones (ts, tr, p, rp).
     """
-
     with open(ruta_archivo, "r", encoding="utf-8") as archivo:
         lineas = [linea.strip() for linea in archivo if linea.strip()]
 
@@ -130,13 +91,10 @@ def leer_finca(ruta_archivo):
 
     n = int(lineas[0])
     finca = []
-
     for linea in lineas[1:]:
         valores = linea.replace(" ", "").split(",")
-
         if len(valores) != 4:
             raise ValueError(f"Línea inválida en {ruta_archivo}: {linea}")
-
         ts, tr, p, rp = map(int, valores)
         finca.append((ts, tr, p, rp))
 
@@ -145,118 +103,47 @@ def leer_finca(ruta_archivo):
             f"El archivo {ruta_archivo} dice que hay {n} tablones, "
             f"pero se leyeron {len(finca)}."
         )
-
     return finca
-
-
-def leer_entrada(ruta_archivo):
-    """
-    Función auxiliar.
-
-    Objetivo:
-        Alias de leer_finca, por compatibilidad con otros nombres
-        usados en el proyecto.
-
-    Recibe:
-        ruta_archivo: ruta del archivo de entrada.
-
-    Retorna:
-        finca leída desde el archivo.
-    """
-
-    return leer_finca(ruta_archivo)
 
 
 def escribir_salida(ruta_archivo, perm, costo):
     """
-    Función auxiliar.
-
-    Objetivo:
-        Escribir la salida en el formato solicitado.
-
-    Recibe:
-        ruta_archivo: ruta donde se guardará la salida.
-        perm: orden de riego.
-        costo: costo total de la programación.
-
-    Genera:
-        Archivo de texto con el formato:
-            costo
-            pi0
-            pi1
-            ...
-            pi(n-1)
+    Escribe la salida en el formato solicitado:
+        costo
+        pi0
+        pi1
+        ...
     """
-
     with open(ruta_archivo, "w", encoding="utf-8") as archivo:
         archivo.write(f"{costo}\n")
-
         for indice_tablon in perm:
             archivo.write(f"{indice_tablon}\n")
 
 
+# ═══════════════════════════════════════════════════════════════
+#  DESCUBRIMIENTO DE CASOS DE PRUEBA
+# ═══════════════════════════════════════════════════════════════
+
 def numero_test(ruta):
-    """
-    Función auxiliar.
-
-    Objetivo:
-        Extraer el número de archivos tipo test1_in.txt,
-        test2_in.txt, test10_in.txt, etc.
-
-    Recibe:
-        ruta: ruta del archivo.
-
-    Retorna:
-        El número del test como entero.
-        Si no encuentra número, retorna un valor grande.
-    """
-
+    """Extrae el número N de archivos tipo testN_in.txt (999999 si no hay)."""
     coincidencia = re.search(r"test(\d+)_in\.txt", Path(ruta).name)
-
-    if coincidencia:
-        return int(coincidencia.group(1))
-
-    return 999999
+    return int(coincidencia.group(1)) if coincidencia else 999999
 
 
 def obtener_archivos_entrada(carpeta_entrada):
-    """
-    Función auxiliar.
+    """Lista ordenada numéricamente de los *_in.txt de una carpeta."""
+    return sorted(Path(carpeta_entrada).glob("*_in.txt"), key=numero_test)
 
-    Objetivo:
-        Obtener todos los archivos *_in.txt de una carpeta,
-        ordenados numéricamente.
 
-    Recibe:
-        carpeta_entrada: ruta de la carpeta donde están los tests.
-
-    Retorna:
-        Lista ordenada de rutas de archivos de entrada.
-    """
-
-    carpeta = Path(carpeta_entrada)
-
-    return sorted(
-        carpeta.glob("*_in.txt"),
-        key=numero_test
-    )
-
+# ═══════════════════════════════════════════════════════════════
+#  REPORTES
+# ═══════════════════════════════════════════════════════════════
 
 def imprimir_solucion(finca, perm, costo, titulo="Solución"):
     """
-    Función auxiliar.
-
-    Objetivo:
-        Mostrar en consola el detalle de una solución para verificar
-        tiempos de inicio, caso aplicado y costo individual.
-
-    Recibe:
-        finca: lista de tablones.
-        perm: orden de riego.
-        costo: costo total calculado.
-        titulo: título opcional para imprimir.
+    Muestra en consola el detalle de una solución (tiempos de inicio,
+    fin, caso aplicado y costo individual) para verificación manual.
     """
-
     tiempos = calcular_tiempos(finca, perm)
 
     print(f"\n{'=' * 60}")
@@ -268,7 +155,6 @@ def imprimir_solucion(finca, perm, costo, titulo="Solución"):
     print("-" * 60)
 
     total_verificado = 0
-
     for indice_tablon in perm:
         ts, tr, p, rp = finca[indice_tablon]
         inicio = tiempos[indice_tablon]
@@ -283,16 +169,137 @@ def imprimir_solucion(finca, perm, costo, titulo="Solución"):
             caso = "Caso 3"
 
         total_verificado += costo_individual
-
         print(
-            f"T{indice_tablon:<7}"
-            f"{inicio:<8}"
-            f"{fin:<8}"
-            f"{rp:<8}"
-            f"{ts:<8}"
-            f"{caso:<10}"
-            f"{costo_individual}"
+            f"T{indice_tablon:<7}{inicio:<8}{fin:<8}{rp:<8}{ts:<8}"
+            f"{caso:<10}{costo_individual}"
         )
 
     print("-" * 60)
     print(f"Total verificado: {total_verificado}\n")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  EJECUCIÓN GENÉRICA (compartida por los tres algoritmos)
+# ═══════════════════════════════════════════════════════════════
+
+def _costo_esperado(ruta_entrada, nombre_salida):
+    """Costo esperado para un test, buscando junto a la entrada o en output/."""
+    candidatos = [ruta_entrada.parent / nombre_salida, Path("output") / nombre_salida]
+    for ruta in candidatos:
+        if ruta.exists():
+            lineas = [
+                ln.strip()
+                for ln in ruta.read_text(encoding="utf-8").splitlines()
+                if ln.strip()
+            ]
+            if lineas:
+                return lineas[0]
+    return None
+
+
+def procesar_lote(algoritmo, carpeta_salida, etiqueta,
+                  max_n=None, carpeta_entrada="tests"):
+    """
+    Ejecuta `algoritmo` sobre todos los *_in.txt de `carpeta_entrada`,
+    guarda cada salida en `carpeta_salida` y compara con el costo esperado.
+
+    Recibe:
+        algoritmo: callable finca -> (orden, costo).
+        carpeta_salida: carpeta destino de los *_out.txt.
+        etiqueta: nombre del algoritmo para el encabezado.
+        max_n: si se da, los tests con n > max_n se saltan.
+        carpeta_entrada: carpeta con los *_in.txt.
+    """
+    carpeta_salida_path = Path(carpeta_salida)
+    carpeta_salida_path.mkdir(exist_ok=True)
+
+    archivos_entrada = obtener_archivos_entrada(carpeta_entrada)
+    if not archivos_entrada:
+        print(f"No se encontraron archivos *_in.txt en {carpeta_entrada}.")
+        return
+
+    print(f"\n{'=' * 65}")
+    print(f"  Batch {etiqueta} — {len(archivos_entrada)} archivo(s)")
+    print(f"  Entrada : {Path(carpeta_entrada).resolve()}")
+    print(f"  Salida  : {carpeta_salida_path.resolve()}")
+    print(f"{'=' * 65}")
+    print(f"  {'Archivo':<18} {'n':<4} {'Costo':<10} {'Esperado':<10} {'Match':<7} {'t(ms)'}")
+    print(f"  {'-' * 58}")
+
+    coincidencias = 0
+    con_esperado = 0
+
+    for ruta_entrada in archivos_entrada:
+        nombre_base = ruta_entrada.name
+        try:
+            finca = leer_finca(ruta_entrada)
+            n = len(finca)
+
+            if max_n is not None and n > max_n:
+                print(f"  {nombre_base:<18} Saltado (n={n} > {max_n})")
+                continue
+
+            inicio = time.perf_counter()
+            orden, costo = algoritmo(finca)
+            tiempo_ms = (time.perf_counter() - inicio) * 1000
+
+            nombre_salida = nombre_base.replace("_in.txt", "_out.txt")
+            escribir_salida(carpeta_salida_path / nombre_salida, orden, costo)
+
+            match = "-"
+            costo_esperado = _costo_esperado(ruta_entrada, nombre_salida)
+            if costo_esperado is None:
+                costo_esperado = "-"
+            else:
+                con_esperado += 1
+                if str(costo) == costo_esperado:
+                    match = "✓"
+                    coincidencias += 1
+                else:
+                    match = "✗"
+
+            print(
+                f"  {nombre_base:<18} {n:<4} {costo:<10} {costo_esperado:<10} "
+                f"{match:<7} {tiempo_ms:.2f}"
+            )
+
+        except Exception as error:
+            print(f"  {nombre_base:<18} ERROR: {error}")
+
+    if con_esperado:
+        print(f"  {'-' * 58}")
+        print(f"  Coincidencias con esperado: {coincidencias}/{con_esperado}")
+    print(f"{'=' * 65}\n")
+
+
+def ejecutar_cli(argv, algoritmo, carpeta_salida, etiqueta, nombre_script,
+                 max_n=None, etiqueta_costo="Costo"):
+    """
+    Punto de entrada CLI común a los tres algoritmos:
+
+        python <script>                      → procesa todos los tests (batch)
+        python <script> <entrada> <salida>   → resuelve un solo archivo
+
+    Retorna el código de salida del proceso.
+    """
+    if len(argv) == 1:
+        procesar_lote(algoritmo, carpeta_salida, etiqueta, max_n=max_n)
+        return 0
+
+    if len(argv) != 3:
+        print("Uso:")
+        print(f"  python {nombre_script}")
+        print(f"  python {nombre_script} <entrada.txt> <salida.txt>")
+        return 1
+
+    finca = leer_finca(argv[1])
+    orden, costo = algoritmo(finca)
+
+    if costo_total(finca, orden) != costo:
+        print("Advertencia: el costo verificado no coincide con el reportado.")
+
+    escribir_salida(argv[2], orden, costo)
+    print(f"{etiqueta_costo}: {costo}")
+    print(f"Orden: {orden}")
+    print(f"Salida guardada en: {argv[2]}")
+    return 0

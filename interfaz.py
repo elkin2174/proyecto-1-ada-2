@@ -262,7 +262,9 @@ def main():
             mostrar_finca(finca)
 
         elif opcion == "3":
-            resultado = ejecutar_algoritmo("Fuerza bruta", roFB, finca)
+            resultado = ejecutar_algoritmo(
+                "Fuerza bruta", lambda f: roFB(f, verbose=False), finca
+            )
 
             if resultado is not None:
                 ultima_solucion = resultado

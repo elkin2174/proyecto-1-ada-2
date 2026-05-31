@@ -16,16 +16,8 @@ Uso:
 from __future__ import annotations
 
 import sys
-import time
-from pathlib import Path
 
-from f_auxiliares import (
-    costo_tablon,
-    costo_total,
-    escribir_salida,
-    leer_finca,
-    obtener_archivos_entrada,
-)
+from f_auxiliares import costo_tablon, ejecutar_cli
 
 INF = 10**18
 
@@ -137,102 +129,15 @@ def roPD(finca):
     return _resolver_dp(finca)
 
 
-def procesar_todas_las_entradas(carpeta_entrada="tests", carpeta_salida="output_pd"):
-    """
-    Lee todos los *_in.txt, ejecuta roPD y guarda salidas en carpeta_salida.
-    """
-    carpeta_salida_path = Path(carpeta_salida)
-    carpeta_salida_path.mkdir(exist_ok=True)
-
-    archivos_entrada = obtener_archivos_entrada(carpeta_entrada)
-    if not archivos_entrada:
-        print(f"No se encontraron archivos *_in.txt en {carpeta_entrada}.")
-        return
-
-    print(f"\n{'=' * 65}")
-    print(f"  Batch programación dinámica — {len(archivos_entrada)} archivo(s)")
-    print(f"  Entrada : {Path(carpeta_entrada).resolve()}")
-    print(f"  Salida  : {carpeta_salida_path.resolve()}")
-    print(f"{'=' * 65}")
-    print(f"  {'Archivo':<18} {'n':<4} {'Costo':<10} {'Esperado':<10} {'Match':<7} {'t(ms)'}")
-    print(f"  {'-' * 58}")
-
-    coincidencias = 0
-    con_esperado = 0
-
-    for ruta_entrada in archivos_entrada:
-        nombre_base = ruta_entrada.name
-        try:
-            finca = leer_finca(ruta_entrada)
-            n = len(finca)
-
-            if n > MAX_N_DP:
-                print(f"  {nombre_base:<18} Saltado (n={n} > {MAX_N_DP})")
-                continue
-
-            inicio = time.perf_counter()
-            orden, costo = roPD(finca)
-            tiempo_ms = (time.perf_counter() - inicio) * 1000
-
-            nombre_salida = nombre_base.replace("_in.txt", "_out.txt")
-            ruta_salida = carpeta_salida_path / nombre_salida
-            escribir_salida(ruta_salida, orden, costo)
-
-            match = "-"
-            costo_esperado = "-"
-            ruta_esperado = ruta_entrada.parent / nombre_salida
-            if not ruta_esperado.exists():
-                ruta_esperado = Path("output") / nombre_salida
-            if ruta_esperado.exists():
-                lineas = [
-                    ln.strip()
-                    for ln in ruta_esperado.read_text(encoding="utf-8").splitlines()
-                    if ln.strip()
-                ]
-                costo_esperado = lineas[0]
-                con_esperado += 1
-                if str(costo) == costo_esperado:
-                    match = "✓"
-                    coincidencias += 1
-                else:
-                    match = "✗"
-
-            print(
-                f"  {nombre_base:<18} {n:<4} {costo:<10} {costo_esperado:<10} "
-                f"{match:<7} {tiempo_ms:.2f}"
-            )
-
-        except Exception as error:
-            print(f"  {nombre_base:<18} ERROR: {error}")
-
-    if con_esperado:
-        print(f"  {'-' * 58}")
-        print(f"  Coincidencias con esperado: {coincidencias}/{con_esperado}")
-    print(f"{'=' * 65}\n")
-
-
 def main() -> int:
-    if len(sys.argv) == 1:
-        procesar_todas_las_entradas()
-        return 0
-
-    if len(sys.argv) != 3:
-        print("Uso:")
-        print("  python dinamica.py")
-        print("  python dinamica.py <entrada.txt> <salida.txt>")
-        return 1
-
-    finca = leer_finca(sys.argv[1])
-    orden, costo = roPD(finca)
-
-    if costo_total(finca, orden) != costo:
-        print("Advertencia: el costo verificado no coincide con el reportado.")
-
-    escribir_salida(sys.argv[2], orden, costo)
-    print(f"Costo óptimo: {costo}")
-    print(f"Orden: {orden}")
-    print(f"Salida guardada en: {sys.argv[2]}")
-    return 0
+    return ejecutar_cli(
+        sys.argv, roPD,
+        carpeta_salida="output_pd",
+        etiqueta="programación dinámica",
+        nombre_script="dinamica.py",
+        max_n=MAX_N_DP,
+        etiqueta_costo="Costo óptimo",
+    )
 
 
 if __name__ == "__main__":

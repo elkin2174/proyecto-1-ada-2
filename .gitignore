@@ -1,1 +1,13 @@
 __pycache__/
+*.pyc
+
+# Salidas generadas por los algoritmos
+output/
+output_fb/
+output_pd/
+output_v/
+
+# Artefactos de compilación de PyInstaller
+build/
+dist/
+*.spec
