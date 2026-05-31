@@ -19,6 +19,13 @@ import sys
 import time
 import random
 from itertools import permutations
+from pathlib import Path
+
+from f_auxiliares import (
+    escribir_salida,
+    leer_finca,
+    obtener_archivos_entrada,
+)
 
 # ═══════════════════════════════════════════════════════════════
 #  FUNCIONES BASE (compartidas por todos los algoritmos)
@@ -339,30 +346,6 @@ def analisis_por_tamano(ns=[3,4,5,6,7,8], pruebas_por_n=100):
     print(f'{"═"*65}\n')
 
 
-# ═══════════════════════════════════════════════════════════════
-#  I/O — Lectura y escritura de archivos
-# ═══════════════════════════════════════════════════════════════
-
-def leer_finca(ruta):
-    """Lee una finca desde archivo con formato: n / ts,tr,p,rp por línea."""
-    with open(ruta, 'r') as f:
-        lineas = [l.strip() for l in f if l.strip()]
-    n = int(lineas[0])
-    finca = []
-    for i in range(1, n + 1):
-        partes = lineas[i].split(',')
-        finca.append((int(partes[0]), int(partes[1]), int(partes[2]), int(partes[3])))
-    return finca
-
-
-def escribir_salida(ruta, perm, costo):
-    """Escribe salida en formato: costo / índices de tablones."""
-    with open(ruta, 'w') as f:
-        f.write(str(costo) + '\n')
-        for pi in perm:
-            f.write(str(pi) + '\n')
-
-
 def imprimir_solucion(finca, perm, costo, titulo='Solución'):
     """Muestra detalle completo de la solución para verificación."""
     t = calcular_tiempos(finca, perm)
@@ -389,139 +372,107 @@ def imprimir_solucion(finca, perm, costo, titulo='Solución'):
     print(f'  {"Costo total":<30} {total_v}')
     print()
 
-# ═══════════════════════════════════════════════════════════════
-#  BATCH RUNNER — Corre todos los archivos testN_in.txt
-# ═══════════════════════════════════════════════════════════════
+def procesar_todas_las_entradas(carpeta_entrada="tests", carpeta_salida="output_v"):
+    """
+    Lee todos los *_in.txt, ejecuta roV y guarda salidas en carpeta_salida.
+    """
+    carpeta_salida_path = Path(carpeta_salida)
+    carpeta_salida_path.mkdir(exist_ok=True)
 
-import os
-import glob
- 
-def correr_todos(carpeta_entrada='.', carpeta_salida='output', verbose=True):
-    """
-    Encuentra todos los archivos testN_in.txt en `carpeta_entrada`,
-    corre el algoritmo voraz sobre cada uno y guarda los resultados
-    en `carpeta_salida/testN_out.txt`.
- 
-    También compara con el archivo testN_out.txt esperado si existe.
- 
-    Parámetros:
-        carpeta_entrada : carpeta donde están los archivos testN_in.txt
-        carpeta_salida  : carpeta donde se guardarán los resultados
-        verbose         : si True, imprime el resumen de cada archivo
- 
-    Retorna:
-        lista de dicts con métricas por archivo
-    """
-    os.makedirs(carpeta_salida, exist_ok=True)
- 
-    patron = os.path.join(carpeta_entrada, 'test*_in.txt')
-    archivos = sorted(
-        glob.glob(patron),
-        key=lambda p: int(''.join(filter(str.isdigit, os.path.basename(p))) or '0')
-    )
- 
-    if not archivos:
-        print(f'No se encontraron archivos con el patrón {patron}')
-        return []
- 
-    print(f'\n{"═"*65}')
-    print(f'  Batch voraz — {len(archivos)} archivo(s) encontrados')
-    print(f'  Entrada : {os.path.abspath(carpeta_entrada)}')
-    print(f'  Salida  : {os.path.abspath(carpeta_salida)}')
-    print(f'{"═"*65}')
-    print(f'  {"Archivo":<16} {"n":<4} {"Costo V":<10} {"Esperado":<10} {"Match":<7} {"t(ms)"}')
-    print(f'  {"─"*55}')
- 
-    resumen = []
- 
-    for ruta_in in archivos:
-        nombre_base = os.path.basename(ruta_in)                    # test3_in.txt
-        num         = ''.join(filter(str.isdigit, nombre_base))   # "3"
-        nombre_out  = f'test{num}_out.txt'
-        ruta_out    = os.path.join(carpeta_salida, nombre_out)
-        ruta_esperado = os.path.join(carpeta_entrada, nombre_out)
- 
+    archivos_entrada = obtener_archivos_entrada(carpeta_entrada)
+    if not archivos_entrada:
+        print(f"No se encontraron archivos *_in.txt en {carpeta_entrada}.")
+        return
+
+    print(f"\n{'=' * 65}")
+    print(f"  Batch voraz — {len(archivos_entrada)} archivo(s)")
+    print(f"  Entrada : {Path(carpeta_entrada).resolve()}")
+    print(f"  Salida  : {carpeta_salida_path.resolve()}")
+    print(f"{'=' * 65}")
+    print(f"  {'Archivo':<18} {'n':<4} {'Costo':<10} {'Esperado':<10} {'Match':<7} {'t(ms)'}")
+    print(f"  {'-' * 58}")
+
+    coincidencias = 0
+    con_esperado = 0
+
+    for ruta_entrada in archivos_entrada:
+        nombre_base = ruta_entrada.name
         try:
-            finca = leer_finca(ruta_in)
+            finca = leer_finca(ruta_entrada)
             n = len(finca)
- 
-            t0 = time.perf_counter()
-            perm, costo = roV(finca)
-            elapsed_ms = (time.perf_counter() - t0) * 1000
- 
-            escribir_salida(ruta_out, perm, costo)
- 
-            # Comparar con el esperado si existe
-            match = '-'
-            costo_esperado = '-'
-            if os.path.exists(ruta_esperado):
-                with open(ruta_esperado) as f:
-                    lineas = [l.strip() for l in f if l.strip()]
+
+            inicio = time.perf_counter()
+            orden, costo = roV(finca)
+            tiempo_ms = (time.perf_counter() - inicio) * 1000
+
+            nombre_salida = nombre_base.replace("_in.txt", "_out.txt")
+            ruta_salida = carpeta_salida_path / nombre_salida
+            escribir_salida(ruta_salida, orden, costo)
+
+            match = "-"
+            costo_esperado = "-"
+            ruta_esperado = ruta_entrada.parent / nombre_salida
+            if not ruta_esperado.exists():
+                ruta_esperado = Path("output") / nombre_salida
+            if ruta_esperado.exists():
+                lineas = [
+                    ln.strip()
+                    for ln in ruta_esperado.read_text(encoding="utf-8").splitlines()
+                    if ln.strip()
+                ]
                 costo_esperado = lineas[0]
-                match = '✓' if str(costo) == costo_esperado else '✗'
- 
-            print(f'  {nombre_base:<16} {n:<4} {costo:<10} {costo_esperado:<10} {match:<7} {elapsed_ms:.2f}')
- 
-            resumen.append({
-                'archivo':         nombre_base,
-                'n':               n,
-                'costo_voraz':     costo,
-                'costo_esperado':  costo_esperado,
-                'match':           match,
-                'tiempo_ms':       elapsed_ms,
-                'ruta_salida':     ruta_out,
-            })
- 
-        except Exception as e:
-            print(f'  {nombre_base:<16} ERROR: {e}')
-            resumen.append({'archivo': nombre_base, 'error': str(e)})
- 
-    # Totales
-    con_esperado = [r for r in resumen if r.get('match') in ('✓', '✗')]
-    matches      = sum(1 for r in con_esperado if r['match'] == '✓')
- 
-    print(f'  {"─"*55}')
+                con_esperado += 1
+                if str(costo) == costo_esperado:
+                    match = "✓"
+                    coincidencias += 1
+                else:
+                    match = "✗"
+
+            print(
+                f"  {nombre_base:<18} {n:<4} {costo:<10} {costo_esperado:<10} "
+                f"{match:<7} {tiempo_ms:.2f}"
+            )
+
+        except Exception as error:
+            print(f"  {nombre_base:<18} ERROR: {error}")
+
     if con_esperado:
-        print(f'  Coincidencias con esperado: {matches}/{len(con_esperado)}')
-    t_total = sum(r['tiempo_ms'] for r in resumen if 'tiempo_ms' in r)
-    print(f'  Tiempo total: {t_total:.1f} ms')
-    print(f'  Archivos guardados en: {os.path.abspath(carpeta_salida)}')
-    print(f'{"═"*65}\n')
- 
-    return resumen
+        print(f"  {'-' * 58}")
+        print(f"  Coincidencias con esperado: {coincidencias}/{con_esperado}")
+    print(f"{'=' * 65}\n")
 
-# ═══════════════════════════════════════════════════════════════
-#  PUNTO DE ENTRADA
-# ═══════════════════════════════════════════════════════════════
 
-if __name__ == '__main__':
-    if len(sys.argv) >= 2 and sys.argv[1] == 'benchmark':
-        # Modo benchmark: analisis_por_tamano
-        print('\n[Modo benchmark: análisis por tamaño de finca]')
+def main() -> int:
+    if len(sys.argv) == 2 and sys.argv[1] == "benchmark":
+        print("\n[Modo benchmark: análisis por tamaño de finca]")
         analisis_por_tamano(ns=[3, 4, 5, 6, 7, 8], pruebas_por_n=150)
-        print('\n[Análisis con n=5, 500 pruebas]')
+        print("\n[Análisis con n=5, 500 pruebas]")
         analizar_rendimiento(num_pruebas=500, n=5)
+        return 0
 
-    elif len(sys.argv) >= 2 and sys.argv[1] == 'batch':
-        entrada = sys.argv[2] if len(sys.argv) > 2 else '.'
-        salida  = sys.argv[3] if len(sys.argv) > 3 else 'output'
-        correr_todos(carpeta_entrada=entrada, carpeta_salida=salida)
+    if len(sys.argv) == 1:
+        procesar_todas_las_entradas()
+        return 0
 
-    elif len(sys.argv) >= 2:
-        # Modo normal: leer archivo, correr voraz
-        ruta_entrada = sys.argv[1]
-        ruta_salida  = sys.argv[2] if len(sys.argv) > 2 else None
+    if len(sys.argv) != 3:
+        print("Uso:")
+        print("  python voraz.py")
+        print("  python voraz.py <entrada.txt> <salida.txt>")
+        print("  python voraz.py benchmark")
+        return 1
 
-        finca = leer_finca(ruta_entrada)
-        perm_v, costo_v = roV(finca)
-        imprimir_solucion(finca, perm_v, costo_v, 'Algoritmo Voraz (roV)')
+    finca = leer_finca(sys.argv[1])
+    orden, costo = roV(finca)
 
-        if ruta_salida:
-            escribir_salida(ruta_salida, perm_v, costo_v)
-            print(f'  Resultado guardado en: {ruta_salida}')
+    if costo_total(finca, orden) != costo:
+        print("Advertencia: el costo verificado no coincide con el reportado.")
 
-    else:
-        print('Uso:')
-        print('  python riego_voraz.py <entrada.txt> [salida.txt]   # Corre el voraz')
-        print('  python riego_voraz.py demo tabla                   # Tabla F1 y F2')
-        print('  python riego_voraz.py benchmark                    # Análisis completo')
+    escribir_salida(sys.argv[2], orden, costo)
+    print(f"Costo mínimo: {costo}")
+    print(f"Orden: {orden}")
+    print(f"Salida guardada en: {sys.argv[2]}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
